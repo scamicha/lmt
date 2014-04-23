@@ -5,6 +5,8 @@ AM_CPPFLAGS = -I../libproc -I../liblsd
 noinst_LTLIBRARIES = liblmt.la
 
 liblmt_la_SOURCES = \
+	cmt.c \
+	cmt.h \
 	ost.c \
 	ost.h \
 	mdt.c \

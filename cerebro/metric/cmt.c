@@ -37,6 +37,7 @@
 
 #include "lmt.h"
 #include "router.h"
+#include "cmt.h"
 #include "lmtconf.h"
 #include "util.h"
 
@@ -61,7 +62,7 @@ _get_metric_value (unsigned int *metric_value_type,
     char *buf = xmalloc (CEREBRO_MAX_DATA_STRING_LEN);
     int retval = -1;
 
-    if (lmt_router_string_v1 (ctx, buf, CEREBRO_MAX_DATA_STRING_LEN) < 0)
+    if (lmt_cmt_string_v1 (ctx, buf, CEREBRO_MAX_DATA_STRING_LEN) < 0)
         goto done; 
     *metric_value_type = CEREBRO_DATA_VALUE_TYPE_STRING;
     *metric_value_len = strlen (buf) + 1;
@@ -103,7 +104,7 @@ _get_metric_flags (u_int32_t *flags)
 static int
 _get_metric_period (int *period)
 {
-    *period = LMT_UPDATE_INTERVAL;
+    *period = LMT_UPDATE_INTERVAL * 6;
     return 0;
 }
 
