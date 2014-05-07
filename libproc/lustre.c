@@ -72,6 +72,7 @@
 #define PROC_FS_LUSTRE_MDT_EXPORTS      "%s/%s/exports"
 #define PROC_FS_LUSTRE_OST_EXPORTS  	"fs/lustre/obdfilter/%s/exports"
 #define PROC_FS_LUSTRE_MDT_EXPORT_STATS "%s/%s/exports/%s/stats"
+#define PROC_FS_LUSTRE_OST_EXPORT_STATS "fs/lustre/obdfilter/%s/exports/%s/stats"
 
 #define PROC_FS_LUSTRE_OST_BRW_STATS    "fs/lustre/obdfilter/%s/brw_stats"
 
@@ -1304,6 +1305,32 @@ done:
     if (ret == 0)
         *hp = h;
     return ret;
+}
+
+int 
+proc_lustre_get_read_and_write_bytes(pctx_t ctx, char *mdt_name, char* node_name, uint64_t* read_bytes, uint64_t* write_bytes)
+{
+    hash_t stats_hash = hash_create (STATS_HASH_SIZE, (hash_key_f)hash_key_string,
+                    (hash_cmp_f)strcmp, (hash_del_f)_destroy_shash);
+
+	int ret = -1;
+    if ((ret = proc_openf (ctx, PROC_FS_LUSTRE_OST_EXPORT_STATS,
+                               mdt_name, node_name)) < 0) {
+#if NONFATAL_MISSING_MDT_EXPORT_STATS
+            if (errno == ENOENT)
+                ret = 0;
+#endif
+            goto done;
+    }
+    _hash_stats( ctx, stats_hash );
+	proc_lustre_parsestat (stats_hash, "read_bytes", NULL, NULL, NULL,
+                           read_bytes, NULL);
+	proc_lustre_parsestat (stats_hash, "write_bytes", NULL, NULL, NULL,
+                           write_bytes, NULL);
+done:
+    hash_destroy (stats_hash);
+    proc_close (ctx);
+	return ret;
 }
 
 /*
