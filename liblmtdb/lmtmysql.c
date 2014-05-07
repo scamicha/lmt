@@ -70,6 +70,7 @@ struct lmt_db_struct {
     MYSQL_STMT *ins_oss_data;
     MYSQL_STMT *ins_ost_data;
     MYSQL_STMT *ins_router_data;
+    MYSQL_STMT *ins_cmt_data;
 
     /* cached most recent TIMESTAMP_INFO insertion */
     uint64_t timestamp;
@@ -105,6 +106,10 @@ const char *sql_ins_ost_data =
 const char *sql_ins_router_data =
     "insert into ROUTER_DATA "
     "(ROUTER_ID, TS_ID, BYTES, PCT_CPU) "
+    "values (?, ?, ?, ?)";
+const char *sql_ins_cmt_data =
+    "insert into CLIENT_DATA "
+    "(CLIENT_ID, TS_ID, READ_BYTES, WRITE_BYTES) "
     "values (?, ?, ?, ?)";
 
 /* sql for populating the idcache in bulk */
@@ -892,6 +897,55 @@ done:
     return retval;
 }
 
+int
+lmt_db_insert_cmt_data (lmt_db_t db, char *nodename,
+                        uint64_t read_bytes, uint64_t write_bytes)
+{
+    MYSQL_BIND param[4];
+    uint64_t client_id;
+    int retval = -1;
+    assert (db->magic == LMT_DBHANDLE_MAGIC);
+
+    if (!db->ins_cmt_data) {
+        if (lmt_conf_get_db_debug ())
+            msg ("no permission to insert into %s CLIENT_DATA",
+                 lmt_db_fsname (db));
+        goto done;
+    }
+    client_id = 1;
+
+    if (_update_timestamp (db) < 0)
+        goto done;
+
+    memset (param, 0, sizeof (param));
+    assert (mysql_stmt_param_count (db->ins_cmt_data) == 4);
+    _param_init_int (&param[0], MYSQL_TYPE_LONG, &client_id);
+    _param_init_int (&param[1], MYSQL_TYPE_LONG, &db->timestamp_id);
+    _param_init_int (&param[2], MYSQL_TYPE_LONGLONG, &read_bytes);
+    _param_init_int (&param[3], MYSQL_TYPE_LONGLONG, &write_bytes);
+   
+    if (mysql_stmt_bind_param (db->ins_cmt_data, param)) {
+        if (lmt_conf_get_db_debug ())
+            msg ("error binding parameters for insert into %s CLIENT_DATA: %s",
+                lmt_db_fsname (db), mysql_error (db->conn));
+        goto done;
+    }
+    printf("%s\n", nodename);
+    if (mysql_stmt_execute (db->ins_cmt_data)) {
+        if (mysql_errno (db->conn) == ER_DUP_ENTRY) {
+            retval = 0; /* expected failure if previous insert was delayed */
+            goto done;
+        }
+        if (lmt_conf_get_db_debug ())
+            msg ("error executing insert into %s CLIENT_DATA: %s",
+                 lmt_db_fsname (db), mysql_error (db->conn));
+        goto done;
+    }
+    retval = 0;
+done:
+     return retval;
+}
+
 /**
  ** Database handle functions
  **/
@@ -982,10 +1036,12 @@ lmt_db_create (int readonly, const char *dbname, lmt_db_t *dbp)
             prepfail++;
         if (_prepare_stmt (db, &db->ins_router_data, sql_ins_router_data) < 0)
             prepfail++;
+        if (_prepare_stmt (db, &db->ins_cmt_data, sql_ins_cmt_data) < 0)
+            prepfail++;
     }
     if (prepfail) {
         if (lmt_conf_get_db_debug ())
-            msg ("lmt_db_create: %s: failed to prepare %d/6 inserts",
+            msg ("lmt_db_create: %s: failed to prepare %d/7 inserts",
                  dbname, prepfail);
         goto done;
     }

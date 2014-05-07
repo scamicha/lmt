@@ -70,6 +70,7 @@
 #define PROC_FS_LUSTRE_OST_STATS        "fs/lustre/obdfilter/%s/stats"
 
 #define PROC_FS_LUSTRE_MDT_EXPORTS      "%s/%s/exports"
+#define PROC_FS_LUSTRE_OST_EXPORTS  	"fs/lustre/obdfilter/%s/exports"
 #define PROC_FS_LUSTRE_MDT_EXPORT_STATS "%s/%s/exports/%s/stats"
 
 #define PROC_FS_LUSTRE_OST_BRW_STATS    "fs/lustre/obdfilter/%s/brw_stats"
@@ -669,6 +670,28 @@ proc_lustre_mdt_exportlist (pctx_t ctx, char *name, List *lp)
 
     if ((ret = snprintf (export_path, len, PROC_FS_LUSTRE_MDT_EXPORTS,
                          mdt_dir, name)) < 0)
+        goto done;
+
+    ret = _subdirlist (ctx, export_path, lp);
+done:
+    if (export_path)
+        free (export_path);
+    return ret;
+}
+
+int
+proc_lustre_ost_exportlist (pctx_t ctx, char *name, List *lp)
+{
+	char *export_path;
+    int ret = -1;
+    int len = strlen (PROC_FS_LUSTRE_OST_EXPORTS) + \
+              strlen (name) + 1;
+
+    if (!(export_path = malloc (len)))
+        msg_exit ("out of memory");
+
+    if ((ret = snprintf (export_path, len, PROC_FS_LUSTRE_OST_EXPORTS,
+                         name)) < 0)
         goto done;
 
     ret = _subdirlist (ctx, export_path, lp);

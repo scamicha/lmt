@@ -42,95 +42,154 @@
 #include "util.h"
 #include "lmtconf.h"
 
-typedef struct {
-    uint64_t    usage[2];
-    uint64_t    total[2];
-    int         valid;      /* number of valid samples [0,1,2] */
-} usage_t;
+// the fact that we define these things here probably means _itemize_mdt_export_stats should be moved somewhere else
+int 
+proc_lustre_get_read_and_write_bytes(pctx_t ctx, char *mdt_name, char* node_name, uint64_t* read_bytes, uint64_t* write_bytes);
+
 
 static int
-_get_mem_usage (pctx_t ctx, double *fp)
+_itemize_mdt_export_stats (pctx_t ctx, char *mdt_name, char *s, int len)
 {
-    uint64_t kfree, ktot;
+    uint64_t read_bytes, write_bytes;
+    int ret = -1;
+    List l = list_create ((ListDelF)free);
+    ListIterator itr = NULL;
+    char *name;
 
-    if (proc_meminfo (ctx, &ktot, &kfree) < 0) {
-        if (lmt_conf_get_proto_debug ())
-            err ("error reading memory usage from proc");
-        return -1;
+    ret = proc_lustre_ost_exportlist (ctx, mdt_name, &l);
+
+    /* Don't fail if there are no exports -- just skip collection. */
+    if ((ret < 0 && errno == ENOENT) || list_count (l) == 0) {
+        ret = 0;
+        goto done;
+    } else if (ret < 0) {
+        goto done;
     }
-    *fp = ((double)(ktot - kfree) / (double)(ktot)) * 100.0;
-    return 0;
+
+	char buf[256];
+    itr = list_iterator_create (l);
+    while ((name = list_next (itr))) {
+		proc_lustre_get_read_and_write_bytes(ctx, mdt_name, name, &read_bytes, &write_bytes);
+		int n = snprintf(buf, 256, "%s;%" PRIu64 ";%" PRIu64 ";", name, read_bytes, write_bytes);
+		if (n + strlen(s) > len) {
+        if (lmt_conf_get_proto_debug ())
+            msg ("string overflow");
+        return -1;
+		}
+		strcat( s, buf);
+    }
+done:
+    if (itr)
+        list_iterator_destroy (itr);
+    list_destroy (l);
+    return ret;
+}
+
+
+int
+_get_ostinfo_string (pctx_t ctx, char *name, char *s, int len)
+{
+    char *uuid = NULL;
+    hash_t stats_hash = NULL;
+    int retval = -1;
+
+	printf( "_get_ostinfo_string - dir is %s\n", name);
+    if (proc_lustre_uuid (ctx, name, &uuid) < 0) {
+        if (lmt_conf_get_proto_debug ())
+            err ("error reading lustre %s uuid from proc", name);
+        goto done;
+    }
+
+	_itemize_mdt_export_stats( ctx, name, s, len );
+	printf( "%s", s );
+
+    retval = 0;
+done:
+    if (uuid)
+        free (uuid);
+    if (stats_hash)
+        hash_destroy (stats_hash);
+    return retval;
 }
 
 int
 lmt_cmt_string_v1 (pctx_t ctx, char *s, int len)
 {
-    static uint64_t cpuusage = 0, cputot = 0;
+//    static uint64_t cpuused = 0, cputot = 0;
+    ListIterator itr = NULL;
+    List ostlist = NULL;
+//    struct utsname uts;
+//    double cpupct, mempct;
     int retval = -1;
-    struct utsname uts;
-    double mempct, cpupct;
-    uint64_t newbytes;
-    int n, ena;
+    char *name;
 
-    if (proc_lustre_lnet_routing_enabled (ctx, &ena) < 0)
+    if (proc_lustre_ostlist (ctx, &ostlist) < 0)
         goto done;
-    if (!ena) {
+    if (list_count (ostlist) == 0) {
         errno = 0;
         goto done;
     }
+    #if 0
     if (uname (&uts) < 0) {
         err ("uname");
         goto done;
     }
-    if (proc_stat2 (ctx, &cpuusage, &cputot, &cpupct) < 0) {
+    if (proc_stat2 (ctx, &cpuused, &cputot, &cpupct) < 0) {
         if (lmt_conf_get_proto_debug ())
             err ("error reading cpu usage from proc");
         goto done;
     }
-    if (_get_mem_usage (ctx, &mempct) < 0) {
+    if (_get_mem_usage (ctx, &mempct) < 0)
         goto done;
-    }
-    if (proc_lustre_lnet_newbytes (ctx, &newbytes) < 0) {
-        if (lmt_conf_get_proto_debug ())
-            err ("error reading lustre lnet newbytes from proc");
-        goto done;
-    }
-    /* N.B. Use 1.0 not 1 for version for backwards compat - issue 34 */
-    n = snprintf (s, len, "1.0;%s;%f;%f;%"PRIu64,
-                  uts.nodename, cpupct, mempct, newbytes);
+    n = snprintf (s, len, "2;%s;%f;%f;",
+                  uts.nodename,
+                  cpupct,
+                  mempct);
+
     if (n >= len) {
         if (lmt_conf_get_proto_debug ())
             msg ("string overflow");
         goto done;
     }
+    #endif
+    itr = list_iterator_create (ostlist);
+    while ((name = list_next (itr))) {
+        int used = strlen (s);
+        printf( "OST name: %s\n", name );
+       if (_get_ostinfo_string (ctx, name, s + used, len - used) < 0)
+            goto done;
+    }
     retval = 0;
 done:
+    if (itr)
+        list_iterator_destroy (itr);
+    if (ostlist)
+        list_destroy (ostlist);
     return retval;
 }
 
 int
-lmt_cmt_decode_v1 (const char *s, char **namep, float *pct_cpup,
-                      float *pct_memp, uint64_t *bytesp)
+lmt_cmt_decode_v1 (const char *s, char **ostname, uint64_t *read_bytes,
+                      uint64_t *write_bytes)
 {
     int retval = -1;
-    char *name = xmalloc (strlen (s) + 1);
-    float pct_mem, pct_cpu;
-    uint64_t bytes;
+    char *buf = xmalloc (strlen (s) + 1);
+    //uint64_t bytes = 0;
 
-    if (sscanf (s, "%*f;%[^;];%f;%f;%"PRIu64,
-                name, &pct_cpu, &pct_mem, &bytes) != 4) {
-        if (lmt_conf_get_proto_debug ())
-            msg ("lmt_router_v1: parse error");
-        goto done;
-    }
-    *namep = name;
-    *bytesp = bytes;
-    *pct_cpup = pct_cpu;
-    *pct_memp = pct_mem;
+	strcpy( buf, s );
+    printf("%s\n",s);
+    strtok( buf, ";");    
+    strdup( strtok(NULL, ";"));  // skip the ossname
+    *ostname = strdup( strtok(NULL, ";"));
+    if (sscanf( strtok(NULL, ";"), "%"PRIu64, read_bytes ) != 1)
+		goto done;
+    if (sscanf( strtok(NULL, ";"), "%"PRIu64, write_bytes ) != 1)
+		goto done;
+
     retval = 0;
 done:
-    if (retval < 0)
-        free (name);
+    printf( "lmt_cmt_decode_v1: %s, %"PRIu64", %"PRIu64"\n", *ostname, *read_bytes, *write_bytes );
+    free (buf);
     return retval;
 }
 

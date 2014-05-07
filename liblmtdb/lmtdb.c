@@ -421,6 +421,32 @@ done:
         free (ossname);    
 }
 
+void
+lmt_db_insert_cmt_v1 (char *s)
+{
+    lmt_db_t db;
+    char *nodename = NULL;
+    uint64_t read_bytes, write_bytes;
+
+    if (_init_db_ifneeded () < 0)
+        goto done;
+        
+    if (lmt_cmt_decode_v1 (s, &nodename, &read_bytes, &write_bytes) < 0) {
+        goto done;
+    }
+    if (!(db = _svc_to_db ("lmttest")))
+    {
+        goto done;
+	}
+    if (lmt_db_insert_cmt_data (db, nodename, read_bytes, write_bytes) < 0) {
+        _trigger_db_reconnect ();
+        goto done;
+    }
+done:
+    if (nodename)
+        free (nodename);    
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

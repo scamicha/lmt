@@ -105,6 +105,8 @@ _metric_update (const char *nodename,
         lmt_db_insert_mdt_v1 (s);
     } else if (!strcmp (metric_name, "lmt_router") && vers == 1) {
         lmt_db_insert_router_v1 (s);
+    } else if (!strcmp (metric_name, "lmt_cmt") && vers == 1) {
+        lmt_db_insert_cmt_v1 (s);
     /* legacy metrics */
     } else if (!strcmp (metric_name, "lmt_mds") && vers == 2) {
         lmt_db_insert_mds_v2 (s);

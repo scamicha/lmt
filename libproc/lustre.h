@@ -25,6 +25,7 @@ int proc_lustre_ostlist (pctx_t ctx, List *lp);
 int proc_lustre_mdtlist (pctx_t ctx, List *lp);
 int proc_lustre_osclist (pctx_t ctx, List *lp);
 int proc_lustre_mdt_exportlist (pctx_t ctx, char *name, List *lp);
+int proc_lustre_ost_exportlist (pctx_t ctx, char *name, List *lp);
 
 
 int proc_lustre_files (pctx_t ctx, char *name, uint64_t *fp, uint64_t *tp);
