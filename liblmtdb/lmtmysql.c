@@ -123,6 +123,8 @@ const char *sql_sel_ost_info =
     "select OST_NAME, OST_ID from OST_INFO";
 const char *sql_sel_router_info =
     "select HOSTNAME, ROUTER_ID from ROUTER_INFO";
+const char *sql_sel_cmt_info =
+    "select CLIENT_HOSTNAME, CLIENT_ID from CLIENT_INFO";
 const char *sql_sel_operation_info =
     "select OPERATION_NAME, OPERATION_ID from OPERATION_INFO";
 
@@ -143,6 +145,10 @@ const char *sql_ins_router_info_tmpl =
     "insert into ROUTER_INFO "
     "(ROUTER_NAME, HOSTNAME, ROUTER_GROUP_ID) "
     "values ('%s', '%s', 0)";
+const char *sql_ins_cmt_info_tmpl =
+    "insert into CLIENT_INFO "
+    "(UUID, CLIENT_HOSTNAME, CLUS) "
+    "values ('%s', '%s', '%s')";
 
 /* sql for populating the idcache with individual values */
 const char *sql_sel_mds_info_tmpl =
@@ -155,6 +161,8 @@ const char *sql_sel_ost_info_tmpl =
     "select OST_NAME, OST_ID from OST_INFO where OST_NAME = '%s'";
 const char *sql_sel_router_info_tmpl =
     "select HOSTNAME, ROUTER_ID from ROUTER_INFO where HOSTNAME = '%s'";
+const char *sql_sel_cmt_info_tmpl =
+    "select CLIENT_HOSTNAME from CLIENT_INFO";
 
 /* sql for lmtinit */
 const char *sql_drop_fs =
@@ -306,6 +314,9 @@ _populate_idhash (lmt_db_t db)
         goto done;
     /* ROUTER_INFO: HOSTNAME -> ROUTER_ID */
     if (_populate_idhash_all (db, "router", sql_sel_router_info) < 0)
+        goto done;
+    /* CLIENT_INFO: CLIENT_HOSTNAME -> CLIENT_ID */
+    if (_populate_idhash_all (db, "client", sql_sel_cmt_info) < 0)
         goto done;
     /* OPERATION_INFO: OPERATION_NAME -> OPERATION_ID */
     if (_populate_idhash_all (db, "op", sql_sel_operation_info) < 0)
@@ -508,6 +519,35 @@ _insert_router_info (lmt_db_t db, char *rtrname, uint64_t *idp)
         if (lmt_conf_get_db_debug ())
             msg ("error querying %s of %s from ROUTER_INFO after insert: %s",
                  lmt_db_fsname (db), rtrname, mysql_error (db->conn));
+        goto done;
+    }
+    *idp = id;
+    retval = 0;
+done:
+    free (qry);
+    return retval;
+}
+
+static int
+_insert_cmt_info (lmt_db_t db, char *clientname, uint64_t *idp)
+{
+    int retval = -1;
+    uint64_t id;
+    int len = strlen (sql_ins_cmt_info_tmpl) + strlen (clientname)*2 + 1;
+    char *qry = xmalloc (len);
+
+    snprintf (qry, len, sql_ins_cmt_info_tmpl, clientname, clientname);
+    if (mysql_query (db->conn, qry)) {
+        if (lmt_conf_get_db_debug ())
+            msg ("error inserting %s CMT_INFO %s: %s",
+                 lmt_db_fsname (db), clientname, mysql_error (db->conn));
+        goto done;
+    }
+    if (_populate_idhash_one (db, "CMT", sql_sel_cmt_info_tmpl, clientname,
+                              &id) < 0) {
+        if (lmt_conf_get_db_debug ())
+            msg ("error querying %s of %s from CMT_INFO after insert: %s",
+                 lmt_db_fsname (db), clientname, mysql_error (db->conn));
         goto done;
     }
     *idp = id;
@@ -898,7 +938,7 @@ done:
 }
 
 int
-lmt_db_insert_cmt_data (lmt_db_t db, char *nodename,
+lmt_db_insert_cmt_data (lmt_db_t db, char *clientname,
                         uint64_t read_bytes, uint64_t write_bytes)
 {
     MYSQL_BIND param[4];
@@ -912,7 +952,20 @@ lmt_db_insert_cmt_data (lmt_db_t db, char *nodename,
                  lmt_db_fsname (db));
         goto done;
     }
-    client_id = 1;
+    if (_lookup_idhash (db, "client", clientname, &client_id) < 0) {
+        if (lmt_conf_get_db_autoconf ()) {
+            if (lmt_conf_get_db_debug ())
+                msg ("adding %s to %s CLIENT_INFO", clientname,lmt_db_fsname (db));
+            if (_insert_cmt_info (db, clientname, &client_id) < 0)
+                goto done;
+        } else {
+            if (lmt_conf_get_db_debug ())
+                msg ("%s: no entry in %s CLIENT_INFO and db_autoconf disabled",
+                     clientname, lmt_db_fsname (db));
+            retval = 0; /* avoid a reconnect */
+            goto done;
+        }
+    }
 
     if (_update_timestamp (db) < 0)
         goto done;
@@ -930,7 +983,7 @@ lmt_db_insert_cmt_data (lmt_db_t db, char *nodename,
                 lmt_db_fsname (db), mysql_error (db->conn));
         goto done;
     }
-    printf("%s\n", nodename);
+
     if (mysql_stmt_execute (db->ins_cmt_data)) {
         if (mysql_errno (db->conn) == ER_DUP_ENTRY) {
             retval = 0; /* expected failure if previous insert was delayed */
@@ -989,6 +1042,8 @@ lmt_db_destroy (lmt_db_t db)
         mysql_stmt_close (db->ins_ost_data);
     if (db->ins_router_data)
         mysql_stmt_close (db->ins_router_data);
+    if (db->ins_cmt_data)
+        mysql_stmt_close (db->ins_cmt_data);
     if (db->idhash)
         hash_destroy (db->idhash);
     if (db->conn)
