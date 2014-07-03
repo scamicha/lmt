@@ -152,6 +152,7 @@ lmt_cmt_string_v1 (pctx_t ctx, char *s, int len)
         goto done;
     }
     #endif
+    strcpy( "1;", s);
     itr = list_iterator_create (ostlist);
     while ((name = list_next (itr))) {
         int used = strlen (s);
