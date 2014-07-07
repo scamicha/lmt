@@ -49,7 +49,7 @@
 #include "lmtdb.h"
 
 #define MONITOR_NAME            "lmt_mysql"
-#define METRIC_NAMES            "lmt_mdt,lmt_ost,lmt_router"
+#define METRIC_NAMES            "lmt_mdt,lmt_ost,lmt_router,lmt_cmt"
 #define LEGACY_METRIC_NAMES     "lmt_oss,lmt_mds"
 
 static int
@@ -86,6 +86,7 @@ _metric_update (const char *nodename,
               unsigned int metric_value_len,
               void *metric_value)
 {
+    printf( "Metric update: %s\n", metric_name);
     char *s = metric_value;
     float vers;
 
@@ -95,7 +96,7 @@ _metric_update (const char *nodename,
         goto done;
     }
     if (sscanf (s, "%f;", &vers) != 1) {
-        msg ("%s: %s: error parsing metric version", nodename, metric_name);
+        printf ("%s: %s: error parsing metric version\n", nodename, metric_name);
         goto done;
     }
     /* current metrics */
@@ -106,6 +107,7 @@ _metric_update (const char *nodename,
     } else if (!strcmp (metric_name, "lmt_router") && vers == 1) {
         lmt_db_insert_router_v1 (s);
     } else if (!strcmp (metric_name, "lmt_cmt") && vers == 1) {
+        printf("  cmt_update\n");
         lmt_db_insert_cmt_v1 (s);
     /* legacy metrics */
     } else if (!strcmp (metric_name, "lmt_mds") && vers == 2) {
