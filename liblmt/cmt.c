@@ -101,7 +101,7 @@ _get_ostinfo_string (pctx_t ctx, char *name, char *s, int len)
     }
 
 	_itemize_mdt_export_stats( ctx, name, s, len );
-	printf( "%s", s );
+	printf( "  %s\n", s );
 
     retval = 0;
 done:
@@ -115,6 +115,7 @@ done:
 int
 lmt_cmt_string_v1 (pctx_t ctx, char *s, int len)
 {
+    printf( "lmt_cmt_string_v1\n");
 //    static uint64_t cpuused = 0, cputot = 0;
     ListIterator itr = NULL;
     List ostlist = NULL;
@@ -129,29 +130,8 @@ lmt_cmt_string_v1 (pctx_t ctx, char *s, int len)
         errno = 0;
         goto done;
     }
-    #if 0
-    if (uname (&uts) < 0) {
-        err ("uname");
-        goto done;
-    }
-    if (proc_stat2 (ctx, &cpuused, &cputot, &cpupct) < 0) {
-        if (lmt_conf_get_proto_debug ())
-            err ("error reading cpu usage from proc");
-        goto done;
-    }
-    if (_get_mem_usage (ctx, &mempct) < 0)
-        goto done;
-    n = snprintf (s, len, "2;%s;%f;%f;",
-                  uts.nodename,
-                  cpupct,
-                  mempct);
-
-    if (n >= len) {
-        if (lmt_conf_get_proto_debug ())
-            msg ("string overflow");
-        goto done;
-    }
-    #endif
+   
+    strcpy(s, "1;");
     itr = list_iterator_create (ostlist);
     while ((name = list_next (itr))) {
         int used = strlen (s);

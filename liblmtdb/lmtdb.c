@@ -432,13 +432,16 @@ lmt_db_insert_cmt_v1 (char *s)
         goto done;
         
     if (lmt_cmt_decode_v1 (s, &nodename, &read_bytes, &write_bytes) < 0) {
+        msg( "Decode failed");
         goto done;
     }
-    if (!(db = _svc_to_db ("lmttest")))
+    if (!(db = _svc_to_db ("testfs")))
     {
+        msg( "svc_to_db failed");
         goto done;
 	}
     if (lmt_db_insert_cmt_data (db, nodename, read_bytes, write_bytes) < 0) {
+        msg( "insert failed");
         _trigger_db_reconnect ();
         goto done;
     }
