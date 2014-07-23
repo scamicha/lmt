@@ -66,6 +66,8 @@ _itemize_mdt_export_stats (pctx_t ctx, char *mdt_name, char *s, int len)
         goto done;
     }
 
+	strcat(s, mdt_name);
+	strcat(s, ";");
 	char buf[256];
     itr = list_iterator_create (l);
     while ((name = list_next (itr))) {
@@ -160,7 +162,8 @@ lmt_cmt_decode_v1 (const char *s, char **ostname, uint64_t *read_bytes,
     printf("%s\n",s);
     strtok( buf, ";");    
     strdup( strtok(NULL, ";"));  // skip the ossname
-    *ostname = strdup( strtok(NULL, ";"));
+	strdup(strtok(NULL, ";"));  // skip the mdtname
+	*ostname = strdup(strtok(NULL, ";"));
     if (sscanf( strtok(NULL, ";"), "%"PRIu64, read_bytes ) != 1)
 		goto done;
     if (sscanf( strtok(NULL, ";"), "%"PRIu64, write_bytes ) != 1)
