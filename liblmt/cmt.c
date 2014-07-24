@@ -41,6 +41,7 @@
 #include "router.h"
 #include "util.h"
 #include "lmtconf.h"
+#include "cmt.h"
 
 // the fact that we define these things here probably means _itemize_mdt_export_stats should be moved somewhere else
 int 
@@ -66,19 +67,20 @@ _itemize_mdt_export_stats (pctx_t ctx, char *mdt_name, char *s, int len)
         goto done;
     }
 
-	strcat(s, mdt_name);
-	strcat(s, ";");
-	char buf[256];
+    char buf[256];
+    sprintf(buf, "%s;%d;", mdt_name, list_count(l));
+    strcat(s, buf);
+
     itr = list_iterator_create (l);
     while ((name = list_next (itr))) {
-		proc_lustre_get_read_and_write_bytes(ctx, mdt_name, name, &read_bytes, &write_bytes);
-		int n = snprintf(buf, 256, "%s;%" PRIu64 ";%" PRIu64 ";", name, read_bytes, write_bytes);
-		if (n + strlen(s) > len) {
+        proc_lustre_get_read_and_write_bytes(ctx, mdt_name, name, &read_bytes, &write_bytes);
+        int n = snprintf(buf, 256, "%s;%" PRIu64 ";%" PRIu64 ";", name, read_bytes, write_bytes);
+        if (n + strlen(s) > len) {
         if (lmt_conf_get_proto_debug ())
             msg ("string overflow");
         return -1;
-		}
-		strcat( s, buf);
+        }
+        strcat( s, buf);
     }
 done:
     if (itr)
@@ -151,29 +153,45 @@ done:
 }
 
 int
-lmt_cmt_decode_v1 (const char *s, char **ostname, uint64_t *read_bytes,
-                      uint64_t *write_bytes)
+lmt_cmt_decode_v1 (const char *s, List *lp)
 {
+    List l = list_create((ListDelF)free);
     int retval = -1;
+    int ostcount, nodecount;
     char *buf = xmalloc (strlen (s) + 1);
-    //uint64_t bytes = 0;
+    int i, j;
 
-	strcpy( buf, s );
+    // expected format: VERSION;OSTCOUNT;OST1;NODECOUNT;NODE1;READS;WRITES;NODE2;READS;WRITES
+    strcpy( buf, s );
     printf("%s\n",s);
-    strtok( buf, ";");    
-    strdup( strtok(NULL, ";"));  // skip the ossname
-	strdup(strtok(NULL, ";"));  // skip the mdtname
-	*ostname = strdup(strtok(NULL, ";"));
-    if (sscanf( strtok(NULL, ";"), "%"PRIu64, read_bytes ) != 1)
-		goto done;
-    if (sscanf( strtok(NULL, ";"), "%"PRIu64, write_bytes ) != 1)
-		goto done;
+    strtok( buf, ";");  // version
+    if (sscanf(strtok(NULL, ";"), "%d", &ostcount) != 1)
+        goto done;
+    for (i = 0; i < ostcount; ++i)
+    {
+        char ostname[256];
+        strcpy(ostname, strtok(NULL, ";"));
+        if (sscanf(strtok(NULL, ";"), "%d", &nodecount) != 1)
+            goto done;
+        for (j = 0; j < nodecount; ++j)
+        {
+            struct client_io* io = (struct client_io *)xmalloc(sizeof(struct client_io));
+            strcpy(io->ostname, ostname);
+            strcpy(io->nodename, strtok(NULL, ";"));
+            if (sscanf( strtok(NULL, ";"), "%"PRIu64, &io->read_bytes ) != 1)
+                goto done;
+            if (sscanf(strtok(NULL, ";"), "%"PRIu64, &(io->write_bytes)) != 1)
+                goto done;
+            list_append(l, io);
+        }
+    }
 
+    *lp = l;
     retval = 0;
 done:
-    printf( "lmt_cmt_decode_v1: %s, %"PRIu64", %"PRIu64"\n", *ostname, *read_bytes, *write_bytes );
     free (buf);
     return retval;
+
 }
 
 /*
