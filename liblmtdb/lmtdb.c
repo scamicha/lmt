@@ -425,14 +425,14 @@ done:
 void
 lmt_db_insert_cmt_v1 (char *s)
 {
+    List nodes = NULL;
     ListIterator itr = NULL;
     struct client_io *node = NULL;
     lmt_db_t db;
  
-    if (_init_db_ifneeded () < 0)
+    if (_init_db_ifneeded() < 0)
         goto done;
         
-    List nodes;
     if (lmt_cmt_decode_v1 (s, &nodes) < 0) {
         msg( "Decode failed");
         goto done;
@@ -452,8 +452,9 @@ lmt_db_insert_cmt_v1 (char *s)
         }
     }
 done:
-    list_destroy(nodes);
-    
+    if (nodes != NULL)
+        list_destroy(nodes);
+   
 }
 
 /*
