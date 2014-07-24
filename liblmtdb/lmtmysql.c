@@ -147,8 +147,8 @@ const char *sql_ins_router_info_tmpl =
     "values ('%s', '%s', 0)";
 const char *sql_ins_cmt_info_tmpl =
     "insert into CLIENT_INFO "
-    "(UUID, CLIENT_HOSTNAME, CLUS) "
-    "values ('%s', '%s', '%s')";
+    "(CLIENT_UUID, CLIENT_HOSTNAME, CLUSTER) "
+    "values ('', '%s', '%s')";
 
 /* sql for populating the idcache with individual values */
 const char *sql_sel_mds_info_tmpl =
@@ -162,7 +162,7 @@ const char *sql_sel_ost_info_tmpl =
 const char *sql_sel_router_info_tmpl =
     "select HOSTNAME, ROUTER_ID from ROUTER_INFO where HOSTNAME = '%s'";
 const char *sql_sel_cmt_info_tmpl =
-    "select CLIENT_HOSTNAME from CLIENT_INFO";
+    "select CLIENT_HOSTNAME, CLIENT_ID from CLIENT_INFO where CLIENT_HOSTNAME = '%s'";
 
 /* sql for lmtinit */
 const char *sql_drop_fs =
@@ -539,14 +539,14 @@ _insert_cmt_info (lmt_db_t db, char *clientname, uint64_t *idp)
     snprintf (qry, len, sql_ins_cmt_info_tmpl, clientname, clientname);
     if (mysql_query (db->conn, qry)) {
         if (lmt_conf_get_db_debug ())
-            msg ("error inserting %s CMT_INFO %s: %s",
+            msg ("error inserting %s CLIENT_INFO %s: %s",
                  lmt_db_fsname (db), clientname, mysql_error (db->conn));
         goto done;
     }
     if (_populate_idhash_one (db, "CMT", sql_sel_cmt_info_tmpl, clientname,
                               &id) < 0) {
         if (lmt_conf_get_db_debug ())
-            msg ("error querying %s of %s from CMT_INFO after insert: %s",
+            msg ("error querying %s of %s from CLIENT_INFO after insert: %s",
                  lmt_db_fsname (db), clientname, mysql_error (db->conn));
         goto done;
     }
