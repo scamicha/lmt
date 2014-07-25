@@ -543,7 +543,7 @@ _insert_cmt_info (lmt_db_t db, char *clientname, uint64_t *idp)
                  lmt_db_fsname (db), clientname, mysql_error (db->conn));
         goto done;
     }
-    if (_populate_idhash_one (db, "CMT", sql_sel_cmt_info_tmpl, clientname,
+    if (_populate_idhash_one (db, "client", sql_sel_cmt_info_tmpl, clientname,
                               &id) < 0) {
         if (lmt_conf_get_db_debug ())
             msg ("error querying %s of %s from CLIENT_INFO after insert: %s",
