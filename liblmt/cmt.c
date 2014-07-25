@@ -97,7 +97,6 @@ _get_ostinfo_string (pctx_t ctx, char *name, char *s, int len)
     hash_t stats_hash = NULL;
     int retval = -1;
 
-	printf( "_get_ostinfo_string - dir is %s\n", name);
     if (proc_lustre_uuid (ctx, name, &uuid) < 0) {
         if (lmt_conf_get_proto_debug ())
             err ("error reading lustre %s uuid from proc", name);
@@ -105,7 +104,6 @@ _get_ostinfo_string (pctx_t ctx, char *name, char *s, int len)
     }
 
 	_itemize_mdt_export_stats( ctx, name, s, len );
-	printf( "  %s\n", s );
 
     retval = 0;
 done:
@@ -119,31 +117,28 @@ done:
 int
 lmt_cmt_string_v1 (pctx_t ctx, char *s, int len)
 {
-    printf( "lmt_cmt_string_v1\n");
-//    static uint64_t cpuused = 0, cputot = 0;
     ListIterator itr = NULL;
     List ostlist = NULL;
-//    struct utsname uts;
-//    double cpupct, mempct;
     int retval = -1;
     char *name;
 
     if (proc_lustre_ostlist (ctx, &ostlist) < 0)
         goto done;
-    if (list_count (ostlist) == 0) {
+    int ost_count = list_count(ostlist);
+    if (ost_count == 0) {
         errno = 0;
         goto done;
     }
    
-    strcpy(s, "1;");
+    sprintf(s, "1;%d;", ost_count);
     itr = list_iterator_create (ostlist);
     while ((name = list_next (itr))) {
         int used = strlen (s);
-        printf( "OST name: %s\n", name );
        if (_get_ostinfo_string (ctx, name, s + used, len - used) < 0)
             goto done;
     }
     retval = 0;
+    printf("CMT string: %s\n", s);
 done:
     if (itr)
         list_iterator_destroy (itr);
